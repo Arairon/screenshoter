@@ -7,10 +7,20 @@ import pyautogui as pgui
 from psutil import pid_exists
 import math
 import json
-from pynput.mouse import Button, Controller
+from pynput.mouse import Button as Button, Controller as MController
+from pynput.keyboard import Key as Key, Controller as KController
 
 global mouse
-mouse = Controller()
+mouse = MController()
+global keyboard
+keyboard = KController()
+
+def on_move(x,y): pass
+def on_click(x,y,button,pressed): pass
+mlistener = mouse.listener(on_move=on_move, on_click=on_click)
+def on_press(key): pass
+def on_release(key): pass
+klistener = keyboard.listener(on_press=on_press, on_release=on_release)
 
 
 global priorities
@@ -24,80 +34,29 @@ priorities = {
 }
 global screenSize
 screenSize = pgui.size()
-global accuracy
-accuracy=4
-
-def circle(radius, start=0, end=360):
-    print('doing circle')
-    radius /= 5
-    x,y = pgui.position()
-    X = x
-    Y = y
-    # for i in range(start, end):
-    #    if i%accuracy==0:
-    #        pgui.dragTo(X + radius * math.cos(math.radians(i)), Y + radius * math.sin(math.radians(i)))
-    for i in range(start, end):
-       if i%accuracy==0:
-           mouse.move(radius * math.cos(math.radians(i)), radius * math.sin(math.radians(i)))
-    print('circle done')
-
-
-
-def amogus(s=1):
-    s = float(s)
-    print('start')
-    mouse.press(Button.left)
-    mouse.move(0,25*s)
-    circle(25*s/2, 0, 90)
-    mouse.move(0,25 * s)
-    circle(25*s/2, 90, 180)
-    mouse.move(0,-75*s)
-    mouse.move(0,100*s)
-    circle(25/2 * s, 90, 270)
-    circle(25/2 * s, 90, 270)
-    mouse.move(0,-50*s)
-    circle(25/2*s, 180,360)
-    mouse.move(10,0)
-    circle(25 / 2 * s, 0, 180)
-    mouse.move(-10,0)
-    mouse.release(Button.left)
-    mouse.move(0,25)
-    mouse.press(Button.left)
-    circle(25 / 2 * s, 270, 360)
-    mouse.release(Button.left)
-    print('done')
-    sleep(0.1)
-    mouse.release(Button.left)
-    #pgui.moveTo(X + R * math.cos(math.radians(i)), Y + R * math.sin(math.radians(i)))
-
-
 
 global patterns
 patterns = {
-    'amogus': amogus
+
 }
 def draw(pattern, x=screenSize[0]/2, y=screenSize[1]/2, s=1):
     try:
+        cx, cy = mouse.position()
         x=float(x)
         y=float(y)
-        curX, curY = pgui.position()
-        if x == -1: x=curX
-        elif x == -2: x = screenSize[0] / 2
-        if y == -1: y=curY
+        if x==-1: x=cx
+        elif x==-2: x=screenSize[0]/2
+        if y==-1: y=cy
         elif y==-2: y=screenSize[1]/2
         x=max(200,x)
         y=max(200,y)
-        print(f'{pattern=}, {x=}:{y=}')
-        if pattern in patterns.keys():
-            send(f'Drawing {pattern} at {x}:{y}', 'Draw', priorities['draw'])
-            pgui.moveTo(x, y)
-            patterns[pattern](s)
-        else: send(f'No such pattern "{pattern}", list={patterns.keys()}', 'DrawError', priorities['draw'])
+
+
+
+    except KeyboardInterrupt: raise KeyboardInterrupt
     except Exception as e:
         send(f'Exception: {e} @draw', 'error', priorities['error'])
 
-global mainpid
-mainpid=0
 
 def threadrun(func, daemon=True):
     th=Thread(target=func, daemon=daemon).start()
@@ -138,11 +97,12 @@ def msghandle(msg):
             msg = msg['message']
             print(msg)
             if msg[0] == '_':
-                if msg.split('>')[1] == 'exec':
-                    cmd = ''.join(msg.split('>')[2:])
+                msg = msg.split('>')
+                if msg[1] == 'exec':
+                    cmd = ''.join(msg[2:])
                     dexec(cmd)
-                if msg.split('>')[1] == 'draw':
-                    drw = ''.join(msg.split('>')[2:])
+                if msg[1] == 'draw':
+                    drw = ''.join(msg[2:])
                     if '/' in drw:
                         x,y,s = drw.split('/')[1:]
                     pat = drw.split('/')[0]
@@ -152,28 +112,7 @@ def msghandle(msg):
     except Exception as e: send(f'Exception: {e} @msghandle', 'error', priorities['error'])
 
 
-def updown():
-    sleep(3)
-    while True:
-        if pid_exists(mainpid):
-            pass
-            #send('Still alive', '', 1, 'https://ntfy.sh/amogoos-UPDOWN')
-        else:
-            send('Process dead!', '', priorities['merror'])
-            threadrun(main, False)
-        sleep(15)
-
-
-
-threadrun(updown, False)
-threadrun(ntfylisten)
-def main():
-    mainpid = os.getpid()
-    print('main alive')
-    while True: pass
-    print('main dead')
-
-threadrun(main, False)
+threadrun(ntfylisten, False)
 
 print('Good luck, amogoos')
 while True: pass
