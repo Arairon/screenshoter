@@ -1,9 +1,10 @@
-import pyautogui as pag
 import requests as req
 import PIL as pil
 import base64 as b64
 from datetime import datetime
 from threading import Thread
+import websockets
+import asyncio
 import socket
 import json
 import io
@@ -63,8 +64,8 @@ def decodeIm(s):
 
 cacheSize=1024
 host = ''
-port = input('Port: (Leave empty for 50000) ')
-port = int(port) if port.isdigit() else 50000
+port = input('Port: (Leave empty for 45000) ')
+port = int(port) if port.isdigit() else 45000
 
 S = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 S.bind((host, port))
@@ -83,6 +84,7 @@ class Client:
         self.port=addr[1]
         self.role='undefined'
         self.active=True
+        self.f=0
     def send(self, msg):
         self.s.sendall(msg.encode('utf-8'))
 
@@ -119,6 +121,11 @@ def listen(client):
             client.active=False
             client.s.close()
             print(f'Lost connection to client ID {client.id} @{client.ip}')
+        except IndexError:
+            client.f+=1
+            print(f'Index error {client.f=}  ',end='')
+            if client.f>3: print('Dropping client');client.active=False
+            else: print('Ignoring')
         except KeyboardInterrupt: raise KeyboardInterrupt
         except Exception as e:
             print(f'Exception at listen: {e}')
@@ -133,6 +140,31 @@ def accept():
         except KeyboardInterrupt: raise KeyboardInterrupt
         except Exception as e:
             print(f'Exception at accept: {e}')
-
 threadrun(accept)
+
+cmdList = []
+def ws():
+    async def wsHandle(ws):
+        global cmdList
+        async for msg in ws:
+            cmdList.append(msg)
+            print(cmdList)
+
+    async def wsServer():
+        async with websockets.serve(wsHandle,'',45001):
+            await asyncio.Future()
+    asyncio.run(wsServer())
+threadrun(ws)
+
+def cmdListHandle():
+    global cmdList
+    while True:
+        try:
+            if cmdList:
+                cmd = cmdList.pop()
+                print(f'Received command: {cmd}')
+                post('info','CMD received',f'CMD: {cmd}', 1)
+        except Exception as e:
+            print(f'Error@cmdListHandle: {e}')
+threadrun(cmdListHandle)
 while True: exec(input('Exec: '))

@@ -11,7 +11,7 @@ import json
 import io
 
 cfg = {
-    'sockServer1': 'arairon.xyz:50000',
+    'sockServer1': 'arairon.xyz:45000',
     'defaultPostServer': 'https://ntfy.sh/',
     'backupPostServer': 'http://ntfy.sh/',
     'cmdPostChannel': 'arai-ss-POST',
@@ -70,7 +70,7 @@ def listen():
                 data = json.loads(data)
                 print(data)
                 if 'msgManifest' not in data: print('Not a valid json');continue
-
+        #except IndexError
         except ConnectionResetError:
             post('info','Lost connection','Lost connection to server')
             S.close();S=None;break
@@ -98,6 +98,7 @@ def post(t='info', title='Error: No topic given', msg='Error: No msg given', pri
         server = cfg['backupPostServer']
         post('info', f'Exception@send', f'{e}', 3)
         req.post(f'{server}', data=json.dumps(obj))
+    #add recursion protection
 
 
 def getTime():
@@ -123,7 +124,8 @@ def screenshot(comment='none'):
         'id': randint(0,100000),
         'date': getTime(),
         'comment': comment,
-        'img': encoded}
+        'img': encoded,
+        'thumbnail':None} #Add thumbnails
     im.close()
     s = json.dumps(obj)
     imagesToSend.append(s)
@@ -143,7 +145,6 @@ def connector():
                 fsend('clientManifest', cfg['clientManifest'])
             except Exception as e:
                 post('info', 'Error connecting', f'Connection to {host}:{port} failed with E:{e}', 1)
-                sleep(cfg['timeout'])
                 S=None
         sleep(cfg['timeout'])
     tempS.close()
