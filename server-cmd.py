@@ -1,13 +1,11 @@
-import pyautogui as pag
 import requests as req
 import PIL as pil
 import base64 as b64
 from datetime import datetime
 from threading import Thread
-from time import sleep
-from random import randint
+import websockets
+import asyncio
 import socket
-from sys import getsizeof
 import json
 import io
 
@@ -33,10 +31,6 @@ typesDict = {
     'post': cfg['cmdPostChannel']
 }
 
-def threadrun(func, daemon=True, *args):
-    thread = Thread(target=func, daemon=daemon, args=args)
-    thread.start()
-
 def post(t='info', title='Error: No title given', msg='Error: No msg given', priority=1):
     t = t.lower().strip()
     channel = typesDict.get(t, cfg['cmdInfoChannel'])
@@ -52,6 +46,10 @@ def post(t='info', title='Error: No title given', msg='Error: No msg given', pri
         post('info', f'Exception@send', f'{e}', 3)
         req.post(f'{server}', data=json.dumps(obj))
 
+def threadrun(func, daemon=True, *args):
+    thread = Thread(target=func, daemon=daemon, args=args)
+    thread.start()
+
 def getTime():
     now = datetime.now()
     return now.strftime('%d/%m/%Y (%w/7) %H:%M:%S')
@@ -59,49 +57,17 @@ def getTime():
 def encodeIm(im):
     bytes = io.BytesIO()
     im.save(bytes, format='PNG')
-    r = b64.b64encode(bytes.getbuffer()).decode('ascii')
-    bytes.close()
-    return r
+    return b64.b64encode(bytes.getbuffer()).decode('ascii')
 
 def decodeIm(s):
     return pil.Image.open(io.BytesIO(b64.b64decode(s.encode('ascii'))))
 
-imagesToSend=[]
-def screenshot(comment='none'):
-    global imagesToSend
-    im = pag.screenshot()
-    encoded = encodeIm(im)
-    obj={
-        'id': randint(0,100000),
-        'date': getTime(),
-        'crop': cfg['cropValues'],
-        'comment': comment,
-        'img': encoded}
-    im.close()
-    s = json.dumps(obj)
-    imagesToSend.append(s)
-    return s
-
-def sendImage(img):
-    chunk = cfg['imgChunkSize']
-    sock = socket.socket()
-    ip = cfg['sockServerRcv'].split(':')
-    port = int(ip[1]);ip=ip[0]
-    sock.connect((ip,port))
-    bimg = io.BytesIO(img.encode('utf-8'))
-    id=str(img[7:14].split(',')[0]).strip()
-    with sock,bimg:
-        sock.sendall(f'screenshot-{id}.a'.encode('utf-8')+b'\n')
-        sock.sendall(f'{bimg.getbuffer().nbytes}'.encode('utf-8') + b'\n')
-        while True:
-            data = bimg.read(chunk)
-            if not data: break
-            sock.sendall(data)
+print('CMD SERVER')
+cacheSize=cfg['cacheSize']
+host = ''
+port = input('Port: (Leave empty for 45000) ')
+port = int(port) if port.isdigit() else 45000
 
 
-screenshot('test1')
-sendImage(imagesToSend.pop())
-screenshot('test2')
-sendImage(imagesToSend.pop())
-screenshot('test3')
-sendImage(imagesToSend.pop())
+
+
