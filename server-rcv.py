@@ -78,7 +78,7 @@ port = int(port) if port.isdigit() else 45001
 
 sock = socket.socket()
 sock.bind(('',port))
-sock.listen(3)
+sock.listen(10)
 print('Started...')
 
 def processFile(filename):

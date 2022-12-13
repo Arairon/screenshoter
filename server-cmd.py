@@ -62,11 +62,79 @@ def encodeIm(im):
 def decodeIm(s):
     return pil.Image.open(io.BytesIO(b64.b64decode(s.encode('ascii'))))
 
+class Client:
+    instances=[]
+    totalCons=0
+    def __init__(self,socket,addr):
+        Client.instances.append(self)
+        Client.totalCons+=1
+        self.s=socket
+        self.id=Client.totalCons
+        self.ip=addr[0]
+        self.port=addr[1]
+        self.role='undefined'
+        self.active=True
+        self.f=0
+    def send(self, msg):
+        self.s.sendall(msg.encode('utf-8'))
+
+def sendById(id, msg):
+    Client.instances[id].send(msg)
+
 print('CMD SERVER')
 cacheSize=cfg['cacheSize']
 host = ''
 port = input('Port: (Leave empty for 45000) ')
 port = int(port) if port.isdigit() else 45000
+S = socket.socket()
+S.bind((host, port))
+S.listen(5)
+
+
+def listen(client):
+    while client.active:
+        try:
+            data = client.s.recv(cacheSize).decode('utf-8')
+            print(data)
+
+        except ConnectionResetError:
+            client.active=False
+            client.s.close()
+            print(f'Lost connection to client ID {client.id} @{client.ip}')
+            post('info','-CON',f'Lost connection to client ID {client.id} @{client.ip}',3)
+        except IndexError:
+            client.f+=1
+            print(f'Index error {client.f=}  ',end='')
+            if client.f>3: print('Dropping client');client.active=False
+            else: print('Ignoring')
+        except KeyboardInterrupt: raise KeyboardInterrupt
+        except Exception as e:
+            print(f'Exception at listen: {e}')
+
+
+def accept():
+    while True:
+        try:
+            newC = S.accept()
+            client=Client(newC[0],newC[1])
+            print(f'New connection from {client.ip}, assigned ID {client.id}')
+            threadrun(listen,True,client)
+        except KeyboardInterrupt: raise KeyboardInterrupt
+        except Exception as e:
+            print(f'Exception at accept: {e}')
+threadrun(accept)
+
+while True:
+    s = input('Cmd: ')
+    try:
+        exec(s)
+    except Exception as e:
+        print(f'Exception: {e}')
+
+
+
+
+
 
 
 

