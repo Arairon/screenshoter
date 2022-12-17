@@ -124,6 +124,45 @@ def accept():
             print(f'Exception at accept: {e}')
 threadrun(accept)
 
+cmdList = []
+def ws():
+    async def wsHandle(ws):
+        global cmdList
+        try:
+            async for msg in ws:
+                cmdList.append(msg)
+                print(cmdList)
+        except Exception as e:
+            print(f'Exception@wsHandle: {e}')
+
+    async def wsServer():
+        async with websockets.serve(wsHandle,'',45002):
+            await asyncio.Future()
+    asyncio.run(wsServer())
+threadrun(ws)
+
+def cmdListHandle():
+    global cmdList
+    while True:
+        try:
+            if cmdList:
+                cmd = cmdList.pop()
+                print(f'Received msg: {cmd}',end='')
+                if len(cmd)<3: print('');continue
+                elif cmd[:2]!='>>': print('');continue
+                else:
+                    print('   executing...')
+                    split = cmd[2:].split('|')
+                    print(split)
+                    act = split[0]
+                    if act=='screen':
+                        sendById(-1,f'qscreen-{split[1]}')
+                #post('info','CMD received',f'CMD: {cmd}', 1)
+        except Exception as e:
+            print(f'Error@cmdListHandle: {e}')
+threadrun(cmdListHandle)
+
+
 while True:
     s = input('Cmd: ')
     try:

@@ -4,8 +4,10 @@ import PIL as pil
 import base64 as b64
 from datetime import datetime
 from threading import Thread
+from random import randint
 import websockets
 import asyncio
+import shutil
 import socket
 import json
 import io
@@ -34,6 +36,13 @@ typesDict = {
     'out': cfg['cmdOutChannel'],
     'post': cfg['cmdPostChannel']
 }
+
+imgMetaExample = {
+    'id': ...,
+    'date': ...,
+    'comment': ...
+}
+imgsMeta = {}
 
 def post(t='info', title='Error: No title given', msg='Error: No msg given', priority=1):
     t = t.lower().strip()
@@ -83,42 +92,62 @@ print('Started...')
 
 def processFile(filename):
     filepath = os.path.join('rcv-files',filename)
-    with open(filepath, 'rb') as f:
-        data = f.read()
-        s = data.decode('utf-8')
-        obj = json.loads(s)
-        print(f'Received screenshot-{obj["id"]} taken at {obj["date"]} with crop {obj["crop"]} and comment {obj["comment"]}')
-        img = decodeIm(obj["img"])
-        #img.crop()                <-----------
-        img.save(os.path.join('processed', f'screenshot-{obj["id"]}.png'))
-        img.close()
-        with open(os.path.join('processed', f'screenshot-{obj["id"]}.data'),'w') as datafile:
-            del obj['img']
-            datafile.write(json.dumps(obj))
+    if filepath.split('.')[-1] != 'invalid':
+        with open(filepath,'rb') as f:
+            data = f.read().decode('utf-8')
+            img = decodeIm(data)
+            #img.crop()
+            img.save(os.path.join('processed', filename))
+            img.close()
+
+        if os.path.exists(os.path.join('web','py','preview.png')): os.remove(os.path.join('web','py','preview.png'))
+        shutil.copy(os.path.join('processed', filename), os.path.join('web','py','preview.png'), follow_symlinks=True)
+    #with open(filepath, 'rb') as f:
+    #    data = f.read()
+    #    s = data.decode('utf-8')
+    #    obj = json.loads(s)
+    #    print(f'Received screenshot-{obj["id"]} taken at {obj["date"]} with crop {obj["crop"]} and comment {obj["comment"]}')
+    #    img = decodeIm(obj["img"])
+    #    #img.crop()                <-----------
+    #    img.save(os.path.join('processed', f'screenshot-{obj["id"]}.png'))
+    #    img.close()
+    #    with open(os.path.join('processed', f'screenshot-{obj["id"]}.data'),'w') as datafile:
+    #        del obj['img']
+    #        datafile.write(json.dumps(obj))
 
 
+def receive(client):
+    with client, client.makefile('rb') as clientfile:
+        filename = clientfile.readline().strip().decode()
+        if filename[:3]!='scr':
+            print(f'False connection with first msg: {filename}')
+            client.close()
+            return
+        length = int(clientfile.readline())
+        print(f'Downloading {filename}:{length}...')
+        path = os.path.join('rcv-files', filename)
+        if os.path.isfile(path):
+            print(f'{path} is taken, using ',end='')
+            filename=filename[:-4] + f'_{randint(0,999)}' + filename[-4:]
+            path = os.path.join('rcv-files', filename)
+            print(f'{path}')
+        with open(path, 'wb') as f:
+            while length:
+                chunk = min(length, imgChunk)
+                data = clientfile.read(chunk)
+                if not data: break; print('broke')
+                f.write(data)
+                length -= len(data)
+        if length != 0:
+            print('Invalid download.')
+            os.rename(path, os.path.join('rcv-files', filename + '.invalid'))
+        else:
+            print('Done. Running processFile()')
+            threadrun(processFile, True, filename)
 
 with sock:
     while True:
         client,addr = sock.accept()
         print(f'Connection from {addr}')
-        with client, client.makefile('rb') as clientfile:
-            filename = clientfile.readline().strip().decode()
-            length = int(clientfile.readline())
-            print(f'Downloading {filename}:{length}...')
-            path = os.path.join('rcv-files',filename)
-            with open(path,'wb') as f:
-                while length:
-                    chunk = min(length,imgChunk)
-                    data = clientfile.read(chunk)
-                    if not data: break; print('broke')
-                    f.write(data)
-                    length -= len(data)
-
-
-            if length != 0:
-                print('Invalid download.')
-                os.rename(path, os.path.join('rcv-files',filename+'.invalid'))
-            else:
-                print('Done. Running processFile()')
-                threadrun(processFile, True, filename)
+        receive(client)
+        #threadrun(receive, 1, client)

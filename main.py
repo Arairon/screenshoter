@@ -26,6 +26,7 @@ cfg = {
     'timeout': 5,
     'msgManifest': 'Arai\'s msg format v0.1',
     'clientManifest': '{"role":"screen"}',
+    "reconTimeout": 5,
 }
 typesDict = {
     'info': cfg['cmdInfoChannel'],
@@ -67,41 +68,51 @@ def decodeIm(s):
     return pil.Image.open(io.BytesIO(b64.b64decode(s.encode('ascii'))))
 
 imagesToSend=[]
-def screenshot(comment='none'):
+def screenshot(id=randint(0,1000000)):
     global imagesToSend
     im = pag.screenshot()
     encoded = encodeIm(im)
-    obj={
-        'id': randint(0,100000),
-        'date': getTime(),
-        'crop': cfg['cropValues'],
-        'comment': comment,
-        'img': encoded}
+    obj=(id,encoded)
     im.close()
-    s = json.dumps(obj)
-    imagesToSend.append(s)
-    return s
+    imagesToSend.append(obj)
+    return obj
 
 def sendImage(img):
     chunk = cfg['imgChunkSize']
     sock = socket.socket()
     ip = cfg['sockServerRcv'].split(':')
     port = int(ip[1]);ip=ip[0]
-    sock.connect((ip,port))
-    bimg = io.BytesIO(img.encode('utf-8'))
-    id=str(img[7:14].split(',')[0]).strip()
+    try:
+        sock.connect((ip,port))
+    except:
+        post('info','ERROR@sendImage','Error while sending image, image reappended to queue')
+        imagesToSend.append(img)
+    bimg = io.BytesIO(img[1].encode('utf-8'))
+    id=str(img[0])
     with sock,bimg:
-        sock.sendall(f'screenshot-{id}.a'.encode('utf-8')+b'\n')
+        sock.sendall(f'screenshot-{id}.png'.encode('utf-8')+b'\n')
         sock.sendall(f'{bimg.getbuffer().nbytes}'.encode('utf-8') + b'\n')
         while True:
             data = bimg.read(chunk)
             if not data: break
             sock.sendall(data)
 
+def thsendImage(img):
+    threadrun(sendImage,1,img)
 
 def quickScreenshot(comment='QuickScreenshot'):
-    screenshot(comment)
+    screenshot(getTime().split()[-1].replace(':','-'))
     sendImage(imagesToSend.pop())
+
+def sendAllImgs(thread=False):
+    if not thread:
+        for i in imagesToSend:
+            sendImage(i)
+    else:
+        for i in imagesToSend:
+            thsendImage(i)
+
+
 
 S = socket.socket()
 def reconnect():
@@ -111,7 +122,12 @@ def reconnect():
     ip = cfg['sockServerCmd'].split(':')
     port = int(ip[1]);
     ip = ip[0]
-    S.connect((ip, port))
+    try:
+        S.connect((ip, port))
+    except:
+        post('info', 'ERROR@reconnect', f'Error while reconnecting, waiting {cfg["reconTimeout"]} seconds before retrying')
+        sleep(cfg["reconTimeout"])
+        reconnect()
     post('info', '+CON', 'Connected to cmd server',3)
 reconnect()
 
@@ -122,8 +138,11 @@ def listen():
             data = S.recv(cfg['cacheSize']).decode('utf-8').lower()
             data=data.split('-')
             if data[0]=='qscreen':
-                quickScreenshot(' '.join(data[1:]))
-
+                quickScreenshot('QuickScreenshot' if len(data)<2 else ' '.join(data[1:]))#' '.join(data[1:])
+            if data[0]=='screenshot':
+                screenshot(data[1])
+            if data[0]=='sendall':
+                sendAllImgs()
         except ConnectionResetError:
             post('info','-CON','Lost connection to server', 3)
             reconnect()
